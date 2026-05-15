@@ -236,6 +236,12 @@ export default function WorkspacePage() {
             try {
               const data = JSON.parse(line.slice(6));
               if (data.done) { streamDone = true; break; }
+              if (data.error) {
+                // Show inline error but keep any partial content already streamed
+                full += `\n\n⚠️ ${data.error}`;
+                setStreamingContent(full);
+                continue;
+              }
               if (data.content) {
                 full += data.content;
                 setStreamingContent(full);

@@ -102,6 +102,7 @@ router.post("/chat", requireAuth, async (req, res) => {
     const controller = new AbortController();
     let fullResponse = "";
     let aborted = false;
+    let streamError = false;
 
     const onClose = () => {
       aborted = true;
@@ -116,8 +117,6 @@ router.post("/chat", requireAuth, async (req, res) => {
         config: {
           systemInstruction: SYSTEM_PROMPT,
           maxOutputTokens: 8192,
-          // Wire the abort signal into the SDK so it can close the underlying
-          // HTTP connection to Gemini when the client disconnects.
           abortSignal: controller.signal,
         },
       });
@@ -134,21 +133,25 @@ router.post("/chat", requireAuth, async (req, res) => {
       const isAbort =
         (streamErr instanceof Error && streamErr.name === "AbortError") ||
         controller.signal.aborted;
-      if (!isAbort) throw streamErr;
+      if (!isAbort) {
+        streamError = true;
+        req.log.error({ err: streamErr }, "Gemini stream error");
+      }
     } finally {
-      // Remove the close listener whether we finished normally or aborted.
       req.off("close", onClose);
     }
 
-    // Signal done to the client immediately — before slower DB writes so
-    // the UI can stop its loading state without waiting for persistence.
+    // Signal done (or error) to the client before slower DB writes.
     if (!aborted) {
+      if (streamError) {
+        res.write(`data: ${JSON.stringify({ error: "AI response was interrupted." })}\n\n`);
+      }
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     }
     res.end();
 
-    // Persist the response (full or partial) in the background.
-    // A separate try/catch ensures a DB hiccup never hangs the client.
+    // Persist the assistant response (full or partial) in the background.
+    // A separate try/catch ensures a DB hiccup never blocks the response.
     if (fullResponse) {
       try {
         await db.insert(messagesTable).values({
