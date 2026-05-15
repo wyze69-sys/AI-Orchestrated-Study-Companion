@@ -235,6 +235,21 @@ export default function SessionScreen() {
           try {
             const parsed = JSON.parse(line.slice(6));
             if (parsed.done) { streamDone = true; break; }
+            if (parsed.error) {
+              // Append inline error from server (e.g. Gemini stream interrupted)
+              fullContent += `\n\n⚠️ ${parsed.error}`;
+              if (assistantAdded) {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    ...updated[updated.length - 1],
+                    content: fullContent,
+                  };
+                  return updated;
+                });
+              }
+              continue;
+            }
             if (parsed.content) {
               fullContent += parsed.content;
               if (!assistantAdded) {
