@@ -43,6 +43,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import NotesPanel from "@/components/NotesPanel";
 const TOKEN_KEY = "studycompanion_token";
+const OPEN_SAVED_SESSION_PREFIX = "studycompanion_open_saved_session_";
 const QUICK_ACTIONS = [
   {
     id: "summarise",
@@ -142,6 +143,7 @@ function WorkspacePage() {
   const [streamMessages, setStreamMessages] = useState([]);
   const [streamingContent, setStreamingContent] = useState("");
   const [includeNotesInChat, setIncludeNotesInChat] = useState(false);
+  const [shouldLoadSavedMessages, setShouldLoadSavedMessages] = useState(false);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
@@ -155,7 +157,7 @@ function WorkspacePage() {
   });
   const messages = useListMessages(sessionId, {
     query: {
-      enabled: !!sessionId,
+      enabled: !!sessionId && shouldLoadSavedMessages,
       queryKey: getListMessagesQueryKey(sessionId)
     }
   });
@@ -176,12 +178,26 @@ function WorkspacePage() {
     }
   });
   useEffect(() => {
+    setActiveDocId(null);
+    setInput("");
+    setIsStreaming(false);
+    setStreamMessages([]);
+    setStreamingContent("");
+    setShouldLoadSavedMessages(false);
+    abortControllerRef.current?.abort();
+    if (!sessionId) return;
+    const openSavedSessionKey = `${OPEN_SAVED_SESSION_PREFIX}${sessionId}`;
+    const shouldRestoreHistory = sessionStorage.getItem(openSavedSessionKey) === "1";
+    sessionStorage.removeItem(openSavedSessionKey);
+    setShouldLoadSavedMessages(shouldRestoreHistory);
+  }, [sessionId]);
+  useEffect(() => {
     if (session.data?.documents && session.data.documents.length > 0 && !activeDocId) {
       setActiveDocId(session.data.documents[0].id);
     }
   }, [session.data, activeDocId]);
   useEffect(() => {
-    if (messages.data && streamMessages.length === 0) {
+    if (shouldLoadSavedMessages && messages.data && streamMessages.length === 0) {
       setStreamMessages(
         messages.data.map((m) => ({
           id: m.id,
@@ -190,7 +206,7 @@ function WorkspacePage() {
         }))
       );
     }
-  }, [messages.data]);
+  }, [shouldLoadSavedMessages, messages.data, streamMessages.length]);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [streamMessages, streamingContent]);

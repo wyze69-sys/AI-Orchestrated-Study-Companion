@@ -8,7 +8,7 @@ import {
   getListSessionsQueryKey,
   getGetDashboardQueryKey
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,9 +44,10 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
+const OPEN_SAVED_SESSION_PREFIX = "studycompanion_open_saved_session_";
 function DashboardPage() {
   const [, setLocation] = useLocation();
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const queryClient = useQueryClient();
   const [newTitle, setNewTitle] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -55,9 +56,24 @@ function DashboardPage() {
   const sessions = useListSessions();
   const dashboard = useGetDashboard();
   const trimmedQuery = searchQuery.trim();
-  const filteredSessions = sessions.data ? sessions.data.filter(
-    (s) => s.title.toLowerCase().includes(trimmedQuery.toLowerCase())
-  ) : null;
+  const searchSessions = useQuery({
+    queryKey: ["/api/sessions/search", trimmedQuery],
+    enabled: !!token && trimmedQuery.length > 0,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/sessions/search?q=${encodeURIComponent(trimmedQuery)}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        signal
+      });
+      if (!response.ok) {
+        throw new Error("Search request failed");
+      }
+      return response.json();
+    }
+  });
+  const visibleSessions = trimmedQuery ? searchSessions.data : sessions.data;
+  const isLoadingSessions = trimmedQuery ? searchSessions.isLoading : sessions.isLoading;
   const createSession = useCreateSession({
     mutation: {
       onSuccess: () => {
@@ -81,6 +97,10 @@ function DashboardPage() {
     e.preventDefault();
     if (!newTitle.trim()) return;
     createSession.mutate({ data: { title: newTitle.trim() } });
+  };
+  const openSavedSession = (sessionId) => {
+    sessionStorage.setItem(`${OPEN_SAVED_SESSION_PREFIX}${sessionId}`, "1");
+    setLocation(`/workspace/${sessionId}`);
   };
   return <div className="min-h-screen bg-background">
       {
@@ -191,7 +211,7 @@ function DashboardPage() {
         {sessions.data && sessions.data.length > 0 && <div className="relative mb-6">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <Input
-    placeholder="Search sessions..."
+    placeholder="Search saved sessions and messages..."
     value={searchQuery}
     onChange={(e) => setSearchQuery(e.target.value)}
     className="pl-9"
@@ -202,7 +222,7 @@ function DashboardPage() {
         {
     /* Sessions list */
   }
-        {sessions.isLoading ? <div className="space-y-3">
+        {isLoadingSessions ? <div className="space-y-3">
             {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
           </div> : sessions.data && sessions.data.length === 0 ? <motion.div
     initial={{ opacity: 0 }}
@@ -220,7 +240,7 @@ function DashboardPage() {
               <Plus className="w-4 h-4 mr-2" />
               Create first session
             </Button>
-          </motion.div> : filteredSessions !== null && filteredSessions.length === 0 ? <motion.div
+          </motion.div> : visibleSessions !== null && visibleSessions.length === 0 ? <motion.div
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     className="text-center py-16"
@@ -231,11 +251,11 @@ function DashboardPage() {
             </div>
             <h3 className="text-lg font-semibold text-foreground mb-1">No sessions found</h3>
             <p className="text-muted-foreground text-sm">
-              No sessions match &ldquo;{searchQuery}&rdquo;. Try a different search term.
+              No saved sessions or messages match &ldquo;{searchQuery}&rdquo;.
             </p>
           </motion.div> : <AnimatePresence mode="popLayout">
             <div className="space-y-3" data-testid="list-sessions">
-              {(filteredSessions ?? []).map((session, i) => <motion.div
+              {(visibleSessions ?? []).map((session, i) => <motion.div
     key={session.id}
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
@@ -244,7 +264,7 @@ function DashboardPage() {
   >
                   <Card
     className="border-card-border hover:shadow-md transition-shadow cursor-pointer group"
-    onClick={() => setLocation(`/workspace/${session.id}`)}
+    onClick={() => openSavedSession(session.id)}
     data-testid={`card-session-${session.id}`}
   >
                     <CardContent className="py-4 px-5">

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { randomUUID } from "crypto";
 import { db } from "@workspace/db";
 import { studySessionsTable, documentsTable, messagesTable } from "@workspace/db";
-import { eq, and, isNull, count, desc, inArray } from "drizzle-orm";
+import { eq, and, isNull, count, desc, inArray, ilike } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 const router = Router();
 router.get("/sessions", requireAuth, async (req, res) => {
@@ -33,6 +33,55 @@ router.get("/sessions", requireAuth, async (req, res) => {
     );
   } catch (err) {
     req.log.error({ err }, "List sessions error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router.get("/sessions/search", requireAuth, async (req, res) => {
+  const query = String(req.query?.q ?? "").trim();
+  try {
+    const sessions = await db.select().from(studySessionsTable).where(
+      and(
+        eq(studySessionsTable.userId, req.user.id),
+        isNull(studySessionsTable.deletedAt)
+      )
+    ).orderBy(desc(studySessionsTable.lastAccessed));
+    const sessionIds = sessions.map((s) => s.id);
+    let matchingSessionIds = new Set(sessionIds);
+    if (query) {
+      const pattern = `%${query}%`;
+      const titleMatches = sessions.filter((s) => s.title.toLowerCase().includes(query.toLowerCase())).map((s) => s.id);
+      const messageMatches = sessionIds.length ? await db.select({ sessionId: messagesTable.sessionId }).from(messagesTable).where(
+        and(
+          inArray(messagesTable.sessionId, sessionIds),
+          ilike(messagesTable.content, pattern)
+        )
+      ) : [];
+      matchingSessionIds = new Set([
+        ...titleMatches,
+        ...messageMatches.map((m) => m.sessionId)
+      ]);
+    }
+    const filteredSessions = sessions.filter((s) => matchingSessionIds.has(s.id));
+    const filteredSessionIds = filteredSessions.map((s) => s.id);
+    const [docCountRows, msgCountRows] = await Promise.all([
+      filteredSessionIds.length ? db.select({ sessionId: documentsTable.sessionId, cnt: count() }).from(documentsTable).where(inArray(documentsTable.sessionId, filteredSessionIds)).groupBy(documentsTable.sessionId) : Promise.resolve([]),
+      filteredSessionIds.length ? db.select({ sessionId: messagesTable.sessionId, cnt: count() }).from(messagesTable).where(inArray(messagesTable.sessionId, filteredSessionIds)).groupBy(messagesTable.sessionId) : Promise.resolve([])
+    ]);
+    const docMap = new Map(docCountRows.map((d) => [d.sessionId, Number(d.cnt)]));
+    const msgMap = new Map(msgCountRows.map((m) => [m.sessionId, Number(m.cnt)]));
+    res.json(
+      filteredSessions.map((s) => ({
+        id: s.id,
+        userId: s.userId,
+        title: s.title,
+        createdAt: s.createdAt,
+        lastAccessed: s.lastAccessed,
+        documentCount: docMap.get(s.id) ?? 0,
+        messageCount: msgMap.get(s.id) ?? 0
+      }))
+    );
+  } catch (err) {
+    req.log.error({ err }, "Search sessions error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

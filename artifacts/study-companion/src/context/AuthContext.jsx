@@ -1,7 +1,14 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { setAuthTokenGetter, setOnUnauthorized } from "@workspace/api-client-react";
 const TOKEN_KEY = "studycompanion_token";
+const OPEN_SAVED_SESSION_PREFIX = "studycompanion_open_saved_session_";
 const AuthContext = createContext(null);
+function clearTemporaryChatState() {
+  try {
+    Object.keys(sessionStorage).filter((key) => key.startsWith(OPEN_SAVED_SESSION_PREFIX)).forEach((key) => sessionStorage.removeItem(key));
+  } catch {
+  }
+}
 function AuthProvider({ children }) {
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
@@ -32,6 +39,7 @@ function AuthProvider({ children }) {
     setOnUnauthorized(() => {
       if (localStorage.getItem(TOKEN_KEY)) {
         localStorage.removeItem(TOKEN_KEY);
+        clearTemporaryChatState();
         setToken(null);
         setUser(null);
       }
@@ -45,6 +53,7 @@ function AuthProvider({ children }) {
   };
   const logout = () => {
     localStorage.removeItem(TOKEN_KEY);
+    clearTemporaryChatState();
     setToken(null);
     setUser(null);
   };
