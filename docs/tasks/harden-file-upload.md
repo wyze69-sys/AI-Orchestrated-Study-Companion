@@ -1,77 +1,31 @@
 # Harden File Upload
 
-## Why
+## Status: DONE
 
-The document upload endpoint still has security and reliability gaps. It accepts `.txt` and `.md` files, stores uploaded content in the database, and serves document content back to clients. This needs stricter validation and safer response shapes.
+Completed in commits `48b0e6a` and `e4d158c` on branch `fix/replit-to-local-dev`.
 
-## Done Looks Like
+## What Was Done
 
-- Faked MIME type uploads are rejected.
-- Binary files renamed to `.txt` or `.md` are rejected.
-- File upload errors return structured JSON.
-- Upload requests are bounded by file count and multipart part count.
-- Each session has a document count cap.
-- Stored filenames are sanitized.
-- Document list responses do not return full document content.
-- Document delete uses a single ownership-checked query.
+| Item | Status |
+|------|--------|
+| Multer limits: `fileSize: 5MB`, `files: 1`, `parts: 2` | ✅ |
+| Content validation: null bytes rejected | ✅ |
+| Content validation: binary magic bytes detected (PNG, JPEG, PDF, ZIP, ELF, EXE, RAR, GIF) | ✅ |
+| Content validation: UTF-8 round-trip via `TextDecoder({ fatal: true })` | ✅ |
+| Filename sanitization: strips path separators, control chars, unsafe chars | ✅ |
+| Per-session document cap: 20 documents max | ✅ |
+| Multer error handling in global Express error middleware (`app.ts`) | ✅ |
+| Document list endpoint returns metadata only (no `content` field) | ✅ |
+| Delete uses single ownership-checked JOIN query (no race condition) | ✅ |
+| Structured JSON errors for all failure modes | ✅ |
 
-## Relevant Files
+## UI Still Gets Content From
 
-- `artifacts/api-server/src/routes/documents.ts`
-- `artifacts/api-server/src/app.ts`
-- `artifacts/api-server/src/middlewares/auth.ts`
-- `lib/api-spec/openapi.yaml`
-- `lib/api-client-react/src/generated`
-- `lib/api-zod/src/generated`
+`GET /sessions/:id` — the session detail endpoint returns full document content
+in its `documents[]` array. No standalone `GET /documents/:id` endpoint was needed
+because the workspace UI fetches the entire session on load.
 
-## Suggested Steps
+## Files Changed
 
-1. Add Multer limits:
-
-   - `fileSize`
-   - `files: 1`
-   - `parts: 2`
-
-2. Add real content validation after `req.file.buffer` is available:
-
-   - reject null bytes
-   - reject known binary signatures
-   - reject invalid UTF-8 if practical
-
-3. Sanitize filenames before storing:
-
-   - strip path separators
-   - strip control characters
-   - keep a simple allow-list such as letters, numbers, spaces, `_`, `-`, and `.`
-
-4. Add a per-session document count cap, for example 20 documents.
-
-5. Move Multer error handling into a dedicated Express error middleware. The current route-level `try/catch` does not reliably catch errors raised before the handler body runs.
-
-6. Change document list responses to metadata only:
-
-   - `id`
-   - `sessionId`
-   - `filename`
-   - `mimeType`
-   - `uploadedAt`
-
-7. Add or confirm a single-document fetch endpoint for content, if the UI still needs document content outside the session detail endpoint.
-
-8. Replace delete fetch-then-delete logic with one ownership-checked delete query to avoid races.
-
-9. Update OpenAPI and regenerate clients if API shapes change:
-
-   ```sh
-   pnpm --filter @workspace/api-spec run codegen
-   ```
-
-## Manual Test Ideas
-
-- Upload a normal `.txt`.
-- Upload a normal `.md`.
-- Upload a binary file renamed to `.txt`.
-- Upload more than the max document count.
-- Upload a filename with path traversal like `../../secret.txt`.
-- Delete a document owned by the user.
-- Attempt to delete a document owned by another user.
+- `artifacts/api-server/src/routes/documents.ts` — all upload/list/delete hardening
+- `artifacts/api-server/src/app.ts` — global Multer error middleware
