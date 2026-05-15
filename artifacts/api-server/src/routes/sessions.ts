@@ -2,7 +2,7 @@ import { Router } from "express";
 import { randomUUID } from "crypto";
 import { db } from "@workspace/db";
 import { studySessionsTable, documentsTable, messagesTable } from "@workspace/db";
-import { eq, and, isNull, count, desc } from "drizzle-orm";
+import { eq, and, isNull, count, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 
 const router = Router();
@@ -20,15 +20,23 @@ router.get("/sessions", requireAuth, async (req, res) => {
       )
       .orderBy(desc(studySessionsTable.lastAccessed));
 
+    const sessionIds = sessions.map((s) => s.id);
+
     const [docCountRows, msgCountRows] = await Promise.all([
-      db
-        .select({ sessionId: documentsTable.sessionId, cnt: count() })
-        .from(documentsTable)
-        .groupBy(documentsTable.sessionId),
-      db
-        .select({ sessionId: messagesTable.sessionId, cnt: count() })
-        .from(messagesTable)
-        .groupBy(messagesTable.sessionId),
+      sessionIds.length
+        ? db
+            .select({ sessionId: documentsTable.sessionId, cnt: count() })
+            .from(documentsTable)
+            .where(inArray(documentsTable.sessionId, sessionIds))
+            .groupBy(documentsTable.sessionId)
+        : Promise.resolve([]),
+      sessionIds.length
+        ? db
+            .select({ sessionId: messagesTable.sessionId, cnt: count() })
+            .from(messagesTable)
+            .where(inArray(messagesTable.sessionId, sessionIds))
+            .groupBy(messagesTable.sessionId)
+        : Promise.resolve([]),
     ]);
 
     const docMap = new Map(docCountRows.map((d) => [d.sessionId, Number(d.cnt)]));

@@ -58,7 +58,29 @@ const QUICK_ACTIONS = [
     id: "flashcards",
     label: "Flashcards",
     icon: Sparkles,
-    prompt: "Generate 5 flashcard pairs (Q&A) from this document.",
+    prompt: `Generate exactly 5 flashcards from this document.
+
+Format each card in Markdown like this:
+
+---
+
+### Card 1
+
+**Q:** [question here]
+
+**A:** [answer here]
+
+---
+
+### Card 2
+
+**Q:** [question here]
+
+**A:** [answer here]
+
+---
+
+(Continue for all 5 cards. Use the horizontal rules and bold Q/A labels exactly as shown. Keep answers concise - 1-3 sentences max.)`,
   },
   {
     id: "explain",
@@ -70,7 +92,47 @@ const QUICK_ACTIONS = [
     id: "quiz",
     label: "Quiz Me",
     icon: GraduationCap,
-    prompt: "Create a 5-question multiple-choice quiz based on this document.",
+    prompt: `Create exactly 5 multiple-choice questions from this document.
+
+Format in Markdown like this:
+
+---
+
+### Question 1
+
+[question text]
+
+- A) [option]
+- B) [option]
+- C) [option]
+- D) [option]
+
+---
+
+### Question 2
+
+[question text]
+
+- A) [option]
+- B) [option]
+- C) [option]
+- D) [option]
+
+---
+
+(Continue for all 5 questions.)
+
+After all questions, add:
+
+---
+
+### Answer Key
+
+1. [letter]
+2. [letter]
+3. [letter]
+4. [letter]
+5. [letter]`,
   },
 ];
 
@@ -236,6 +298,12 @@ export default function WorkspacePage() {
             try {
               const data = JSON.parse(line.slice(6));
               if (data.done) { streamDone = true; break; }
+              if (data.error) {
+                // Show inline error but keep any partial content already streamed
+                full += `\n\n⚠️ ${data.error}`;
+                setStreamingContent(full);
+                continue;
+              }
               if (data.content) {
                 full += data.content;
                 setStreamingContent(full);
