@@ -80,7 +80,7 @@ Format each card in Markdown like this:
 
 ---
 
-(Continue for all 5 cards. Use the horizontal rules and bold Q/A labels exactly as shown. Keep answers concise — 1–3 sentences max.)`,
+(Continue for all 5 cards. Use the horizontal rules and bold Q/A labels exactly as shown. Keep answers concise - 1-3 sentences max.)`,
   },
   {
     id: "explain",
