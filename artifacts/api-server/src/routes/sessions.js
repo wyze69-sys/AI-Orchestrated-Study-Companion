@@ -8,7 +8,7 @@ import { validateQuizResultInput } from "../lib/quiz-persistence.js";
 import { validateFlashcardStatusInput } from "../lib/flashcard-status.js";
 const router = Router();
 
-async function resolveOwnedMessageId(messageId, sessionId, userId) {
+async function resolveOwnedMessageId(messageId, sessionId) {
   if (!messageId) return null;
   const [message] = await db
     .select({ id: messagesTable.id })
@@ -16,8 +16,7 @@ async function resolveOwnedMessageId(messageId, sessionId, userId) {
     .where(
       and(
         eq(messagesTable.id, String(messageId)),
-        eq(messagesTable.sessionId, sessionId),
-        eq(messagesTable.userId, userId)
+        eq(messagesTable.sessionId, sessionId)
       )
     )
     .limit(1);
@@ -337,7 +336,7 @@ router.post("/sessions/:id/flashcards/progress", requireAuth, async (req, res) =
 
     const upserted = [];
     for (const item of rawItems) {
-      const messageId = await resolveOwnedMessageId(item.messageId, sessionId, req.user.id);
+      const messageId = await resolveOwnedMessageId(item.messageId, sessionId);
       const cardIdStr = String(item.cardId).trim();
       const status = item.status;
       const [record] = await db
@@ -490,7 +489,7 @@ const handlePostQuizResult = async (req, res) => {
     }
 
     const { quizId, totalQuestions, score, percentage, answerState, documentId, messageId } = req.body;
-    const normalizedMessageId = await resolveOwnedMessageId(messageId, sessionId, req.user.id);
+    const normalizedMessageId = await resolveOwnedMessageId(messageId, sessionId);
     const now = new Date();
 
     const [saved] = await db
