@@ -5,10 +5,24 @@ import { studySessionsTable, documentsTable, messagesTable } from "@workspace/db
 import { eq, and, isNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { ai } from "@workspace/integrations-gemini-ai";
+import { resolveChatMode, modeInstruction } from "../lib/chat-modes.js";
+import { extractVerifiedSources } from "../lib/source-extraction.js";
+import { createGroundedChatFallback } from "../lib/chat-fallback.js";
 const router = Router();
-const SYSTEM_PROMPT = "You are a focused study assistant. Answer questions ONLY using the provided study material. If the answer is not in the material, say so clearly. Do not make up information.";
+const SYSTEM_PROMPT = `You are a focused, expert AI study assistant. Your goal is to help the student learn and master their study material.
+
+CRITICAL INSTRUCTIONS:
+1. ALWAYS fulfill the specific request made in the latest user prompt:
+   - "Summarise" / General questions (e.g. "what this talk about"): Output a clean, direct explanation or bulleted summary of key points from the material. DO NOT generate quiz questions.
+   - "Flashcards": Generate 5 distinct Question (Q:) and Answer (A:) flashcards based on the material.
+   - "Explain simply": Explain the core concepts in plain English for a beginner.
+   - "Quiz me": Generate 5 multiple-choice questions (A, B, C, D) with actual populated choices, followed by a completed Answer Key at the end (e.g. 1. A, 2. C, 3. B...).
+2. Ground your answers ONLY in the provided study material (and personal notes if attached). If information is not in the material, state that clearly.
+3. NEVER output raw prompt template instructions, placeholder text like '[letter]' or '[question text]', or echo instructions. Always provide real, helpful content.
+4. DO NOT copy or repeat the format of past messages in the conversation (such as previous quizzes). Evaluate the LATEST user request independently and answer it directly.`;
+
 router.post("/chat", requireAuth, async (req, res) => {
-  const { sessionId, documentId, message, includeNotes } = req.body;
+  const { sessionId, documentId, message, includeNotes, mode } = req.body;
   if (!sessionId || !documentId || !message?.trim()) {
     res.status(400).json({ error: "sessionId, documentId, and message are required" });
     return;
@@ -52,16 +66,45 @@ ${session.notes.trim()}
     const documentContext = `Study material:
 ---
 ${doc.content}
----${notesSection}
+---${notesSection}`;
 
-Student question: `;
-    const conversationHistory = priorMessages.slice(0, -1).map((m) => ({
+    const { mode: chatMode, isQuizRequest, isFlashcardRequest } = resolveChatMode({ mode });
+
+    // Filter out past quiz and flashcard turns (both user prompts and assistant outputs)
+    // when the current user prompt is asking a general question or summary.
+    const filteredPriorMessages = priorMessages.slice(0, -1).filter((m) => {
+      const contentLower = m.content.toLowerCase();
+      const isPastQuiz = contentLower.includes("quiz") ||
+                         contentLower.includes("multiple-choice") ||
+                         contentLower.includes("multiple choice") ||
+                         m.content.includes("Question 1") ||
+                         m.content.includes("Question 2") ||
+                         m.content.includes("A) ") ||
+                         m.content.includes("B) ");
+
+      const isPastFlashcard = contentLower.includes("flashcard") ||
+                              m.content.includes("Card 1") ||
+                              m.content.includes("Card 2");
+
+      if (!isQuizRequest && isPastQuiz) {
+        return false;
+      }
+      if (!isFlashcardRequest && isPastFlashcard) {
+        return false;
+      }
+      return true;
+    });
+
+    const conversationHistory = filteredPriorMessages.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }]
     }));
+
+    const modeInstructionText = modeInstruction(chatMode);
+
     const userTurn = {
       role: "user",
-      parts: [{ text: documentContext + message.trim() }]
+      parts: [{ text: `${documentContext}\n\n[CRITICAL DIRECTIVE: ${modeInstructionText}]\n\nCurrent Student Request: ${message.trim()}` }]
     };
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -70,6 +113,7 @@ Student question: `;
     res.flushHeaders();
     const controller = new AbortController();
     let fullResponse = "";
+    let verifiedSources = [];
     let aborted = false;
     let streamError = false;
     const onClose = () => {
@@ -79,7 +123,7 @@ Student question: `;
     req.on("close", onClose);
     try {
       const stream = await ai.models.generateContentStream({
-        model: "gemini-2.5-flash",
+        model: process.env.GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: [...conversationHistory, userTurn],
         config: {
           systemInstruction: SYSTEM_PROMPT,
@@ -91,9 +135,7 @@ Student question: `;
         const text = chunk.text;
         if (text) {
           fullResponse += text;
-          res.write(`data: ${JSON.stringify({ content: text })}
-
-`);
+          res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
         }
       }
     } catch (streamErr) {
@@ -107,13 +149,20 @@ Student question: `;
     }
     if (!aborted) {
       if (streamError) {
-        res.write(`data: ${JSON.stringify({ error: "AI response was interrupted." })}
-
-`);
+        const fallback = createGroundedChatFallback(doc.content, message);
+        fullResponse = fallback.content;
+        verifiedSources = fallback.sources;
+        res.write(`data: ${JSON.stringify({ content: fullResponse })}\n\n`);
       }
-      res.write(`data: ${JSON.stringify({ done: true })}
-
-`);
+      if (!streamError && fullResponse.trim()) {
+        try {
+          verifiedSources = await extractVerifiedSources(doc.content, fullResponse, ai, controller.signal);
+        } catch (srcErr) {
+          req.log.error({ err: srcErr }, "Source extraction error");
+          verifiedSources = [];
+        }
+      }
+      res.write(`data: ${JSON.stringify({ done: true, sources: verifiedSources })}\n\n`);
     }
     res.end();
     if (fullResponse) {
@@ -123,7 +172,8 @@ Student question: `;
           sessionId,
           documentId,
           role: "assistant",
-          content: fullResponse
+          content: fullResponse,
+          sources: verifiedSources
         });
         await db.update(studySessionsTable).set({ lastAccessed: /* @__PURE__ */ new Date() }).where(eq(studySessionsTable.id, sessionId));
       } catch (dbErr) {

@@ -93,6 +93,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/me:
+    delete:
+      operationId: deleteMe
+      tags: [auth]
+      summary: Delete the authenticated user's account and all owned data
+      description: |
+        Permanently deletes the current user and every owned record (sessions,
+        documents, messages, quiz results, flashcard progress) inside a single
+        transaction. Idempotent from the client's perspective: after success,
+        the credential is invalidated and any repeat request is rejected with 401.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Account deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDeletionResponse"
+        "401":
+          description: Unauthorized or invalid/expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Deletion failed (transaction rolled back)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /dashboard:
     get:
       operationId: getDashboard
@@ -107,6 +139,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
+
+  /progress/summary:
+    get:
+      operationId: getProgressSummary
+      tags: [dashboard]
+      summary: Get aggregated study progress summary with weak topics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Progress summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgressSummary"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /sessions:
     get:
@@ -218,6 +271,163 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StudySessionWithDocuments"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sessions/{id}/flashcards/progress:
+    get:
+      operationId: getFlashcardProgress
+      tags: [sessions]
+      summary: List flashcard review progress for a session
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of flashcard progress items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlashcardProgressItem"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: postFlashcardProgress
+      tags: [sessions]
+      summary: Upsert flashcard review status for one or more cards
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlashcardProgressInput"
+      responses:
+        "200":
+          description: Upserted progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlashcardProgressWriteResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: resetFlashcardProgress
+      tags: [sessions]
+      summary: Reset all flashcard review progress for a session
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Progress reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlashcardResetResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sessions/{id}/quizzes/results:
+    get:
+      operationId: getQuizResults
+      tags: [sessions]
+      summary: List completed quiz results for a session
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of quiz results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QuizResult"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: postQuizResult
+      tags: [sessions]
+      summary: Save a completed quiz result (idempotent per session and quiz)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuizResultInput"
+      responses:
+        "200":
+          description: Saved result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuizResultSaveResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Not found
           content:
@@ -398,6 +608,17 @@ components:
         - token
         - user
 
+    AccountDeletionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+        - message
+
     User:
       type: object
       properties:
@@ -512,6 +733,26 @@ components:
         - content
         - uploadedAt
 
+    CitationSource:
+      type: object
+      properties:
+        quote:
+          type: string
+        startOffset:
+          type: integer
+        endOffset:
+          type: integer
+        startLine:
+          type: integer
+        endLine:
+          type: integer
+      required:
+        - quote
+        - startOffset
+        - endOffset
+        - startLine
+        - endLine
+
     Message:
       type: object
       properties:
@@ -526,6 +767,10 @@ components:
           enum: [user, assistant]
         content:
           type: string
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/CitationSource"
         createdAt:
           type: string
           format: date-time
@@ -581,3 +826,299 @@ components:
         - totalDocuments
         - totalMessages
         - recentSessions
+
+    FlashcardProgressItem:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        sessionId:
+          type: string
+        documentId:
+          type: ["string", "null"]
+        messageId:
+          type: ["string", "null"]
+        cardId:
+          type: string
+        status:
+          type: string
+          enum: [known, review]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - sessionId
+        - cardId
+        - status
+        - createdAt
+        - updatedAt
+
+    FlashcardProgressWrite:
+      type: object
+      properties:
+        cardId:
+          type: string
+        status:
+          type: string
+          enum: [known, review]
+        documentId:
+          type: ["string", "null"]
+        messageId:
+          type: ["string", "null"]
+      required:
+        - cardId
+        - status
+
+    FlashcardProgressInput:
+      oneOf:
+        - $ref: "#/components/schemas/FlashcardProgressWrite"
+        - type: array
+          items:
+            $ref: "#/components/schemas/FlashcardProgressWrite"
+        - type: object
+          properties:
+            progress:
+              type: array
+              items:
+                $ref: "#/components/schemas/FlashcardProgressWrite"
+          required:
+            - progress
+
+    FlashcardProgressWriteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        progress:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlashcardProgressItem"
+      required:
+        - success
+        - progress
+
+    FlashcardResetResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+        - message
+
+    QuizResultInput:
+      type: object
+      properties:
+        quizId:
+          type: string
+        messageId:
+          type: ["string", "null"]
+        documentId:
+          type: ["string", "null"]
+        totalQuestions:
+          type: integer
+          minimum: 1
+        score:
+          type: integer
+          minimum: 0
+        percentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+        answerState:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - quizId
+        - totalQuestions
+        - score
+        - percentage
+        - answerState
+
+    QuizResult:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        sessionId:
+          type: string
+        documentId:
+          type: ["string", "null"]
+        messageId:
+          type: ["string", "null"]
+        quizId:
+          type: string
+        totalQuestions:
+          type: integer
+        score:
+          type: integer
+        percentage:
+          type: integer
+        answerState:
+          type: object
+          additionalProperties:
+            type: string
+        completedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - sessionId
+        - quizId
+        - totalQuestions
+        - score
+        - percentage
+        - answerState
+        - completedAt
+        - createdAt
+        - updatedAt
+
+    QuizResultSaveResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        result:
+          $ref: "#/components/schemas/QuizResult"
+      required:
+        - success
+        - result
+
+    WeakTopicSummary:
+      type: object
+      properties:
+        topic:
+          type: string
+        attempts:
+          type: integer
+        incorrectTotal:
+          type: integer
+        recentIncorrectCount:
+          type: integer
+        accuracy:
+          type: integer
+        lastActivity:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - topic
+        - attempts
+        - incorrectTotal
+        - recentIncorrectCount
+        - accuracy
+        - lastActivity
+
+    RecentActivity:
+      type: object
+      properties:
+        latestQuiz:
+          type: ["object", "null"]
+          properties:
+            id:
+              type: string
+            quizId:
+              type: string
+            sessionId:
+              type: string
+            documentId:
+              type: ["string", "null"]
+            messageId:
+              type: ["string", "null"]
+            totalQuestions:
+              type: integer
+            score:
+              type: integer
+            percentage:
+              type: integer
+            completedAt:
+              type: string
+              format: date-time
+        latestFlashcardActivity:
+          type: ["object", "null"]
+          properties:
+            id:
+              type: string
+            cardId:
+              type: string
+            sessionId:
+              type: string
+            status:
+              type: string
+            updatedAt:
+              type: string
+              format: date-time
+      required:
+        - latestQuiz
+        - latestFlashcardActivity
+
+    ProgressSummary:
+      type: object
+      properties:
+        totalSessions:
+          type: integer
+        totalCompletedQuizzes:
+          type: integer
+        averageQuizPercentage:
+          type: integer
+        bestQuizPercentage:
+          type: integer
+        totalFlashcardsReviewed:
+          type: integer
+        knownFlashcardsCount:
+          type: integer
+        reviewAgainFlashcardsCount:
+          type: integer
+        currentStreak:
+          type: integer
+        longestStreak:
+          type: integer
+        activeStudyDays:
+          type: integer
+        lastStudyDate:
+          type: ["string", "null"]
+          format: date
+        streakDates:
+          type: array
+          items:
+            type: string
+            format: date
+        weakTopics:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeakTopicSummary"
+        recentActivity:
+          $ref: "#/components/schemas/RecentActivity"
+      required:
+        - totalSessions
+        - totalCompletedQuizzes
+        - averageQuizPercentage
+        - bestQuizPercentage
+        - totalFlashcardsReviewed
+        - knownFlashcardsCount
+        - reviewAgainFlashcardsCount
+        - currentStreak
+        - longestStreak
+        - activeStudyDays
+        - lastStudyDate
+        - streakDates
+        - weakTopics
+        - recentActivity

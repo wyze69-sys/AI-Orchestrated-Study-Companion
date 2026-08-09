@@ -67,10 +67,12 @@ function getDeploymentDomain() {
     return stripProtocol(process.env.EXPO_PUBLIC_DOMAIN);
   }
 
-  console.error(
-    "ERROR: No deployment domain found. Set REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_DOMAIN",
+  console.log(
+    "Skipping static Expo build: no deployment domain found. " +
+      "Set REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_DOMAIN " +
+      "when deploying to Replit. For local development use `pnpm exec expo start`.",
   );
-  process.exit(1);
+  process.exit(0);
 }
 
 function prepareDirectories(timestamp) {

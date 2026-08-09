@@ -30,6 +30,11 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface AccountDeletionResponse {
+  success: boolean;
+  message: string;
+}
+
 export interface StudySessionInput {
   /** @minLength 1 */
   title: string;
@@ -69,6 +74,14 @@ export interface SessionNotesUpdate {
   notes: string;
 }
 
+export interface CitationSource {
+  quote: string;
+  startOffset: number;
+  endOffset: number;
+  startLine: number;
+  endLine: number;
+}
+
 export type MessageRole = typeof MessageRole[keyof typeof MessageRole];
 
 
@@ -84,6 +97,7 @@ export interface Message {
   documentId: string | null;
   role: MessageRole;
   content: string;
+  sources?: CitationSource[];
   createdAt: string;
 }
 
@@ -104,5 +118,166 @@ export interface DashboardSummary {
   totalDocuments: number;
   totalMessages: number;
   recentSessions: StudySession[];
+}
+
+export type FlashcardProgressItemStatus = typeof FlashcardProgressItemStatus[keyof typeof FlashcardProgressItemStatus];
+
+
+export const FlashcardProgressItemStatus = {
+  known: 'known',
+  review: 'review',
+} as const;
+
+export interface FlashcardProgressItem {
+  id: string;
+  userId: string;
+  sessionId: string;
+  /** @nullable */
+  documentId?: string | null;
+  /** @nullable */
+  messageId?: string | null;
+  cardId: string;
+  status: FlashcardProgressItemStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type FlashcardProgressWriteStatus = typeof FlashcardProgressWriteStatus[keyof typeof FlashcardProgressWriteStatus];
+
+
+export const FlashcardProgressWriteStatus = {
+  known: 'known',
+  review: 'review',
+} as const;
+
+export interface FlashcardProgressWrite {
+  cardId: string;
+  status: FlashcardProgressWriteStatus;
+  /** @nullable */
+  documentId?: string | null;
+  /** @nullable */
+  messageId?: string | null;
+}
+
+export type FlashcardProgressInput = FlashcardProgressWrite | FlashcardProgressWrite[] | {
+  progress: FlashcardProgressWrite[];
+};
+
+export interface FlashcardProgressWriteResponse {
+  success: boolean;
+  progress: FlashcardProgressItem[];
+}
+
+export interface FlashcardResetResponse {
+  success: boolean;
+  message: string;
+}
+
+export type QuizResultInputAnswerState = {[key: string]: string};
+
+export interface QuizResultInput {
+  quizId: string;
+  /** @nullable */
+  messageId?: string | null;
+  /** @nullable */
+  documentId?: string | null;
+  /** @minimum 1 */
+  totalQuestions: number;
+  /** @minimum 0 */
+  score: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  percentage: number;
+  answerState: QuizResultInputAnswerState;
+}
+
+export type QuizResultAnswerState = {[key: string]: string};
+
+export interface QuizResult {
+  id: string;
+  userId: string;
+  sessionId: string;
+  /** @nullable */
+  documentId?: string | null;
+  /** @nullable */
+  messageId?: string | null;
+  quizId: string;
+  totalQuestions: number;
+  score: number;
+  percentage: number;
+  answerState: QuizResultAnswerState;
+  completedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface QuizResultSaveResponse {
+  success: boolean;
+  result: QuizResult;
+}
+
+export interface WeakTopicSummary {
+  topic: string;
+  attempts: number;
+  incorrectTotal: number;
+  recentIncorrectCount: number;
+  accuracy: number;
+  /** @nullable */
+  lastActivity: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type RecentActivityLatestQuiz = {
+  id?: string;
+  quizId?: string;
+  sessionId?: string;
+  /** @nullable */
+  documentId?: string | null;
+  /** @nullable */
+  messageId?: string | null;
+  totalQuestions?: number;
+  score?: number;
+  percentage?: number;
+  completedAt?: string;
+} | null;
+
+/**
+ * @nullable
+ */
+export type RecentActivityLatestFlashcardActivity = {
+  id?: string;
+  cardId?: string;
+  sessionId?: string;
+  status?: string;
+  updatedAt?: string;
+} | null;
+
+export interface RecentActivity {
+  /** @nullable */
+  latestQuiz: RecentActivityLatestQuiz;
+  /** @nullable */
+  latestFlashcardActivity: RecentActivityLatestFlashcardActivity;
+}
+
+export interface ProgressSummary {
+  totalSessions: number;
+  totalCompletedQuizzes: number;
+  averageQuizPercentage: number;
+  bestQuizPercentage: number;
+  totalFlashcardsReviewed: number;
+  knownFlashcardsCount: number;
+  reviewAgainFlashcardsCount: number;
+  currentStreak: number;
+  longestStreak: number;
+  activeStudyDays: number;
+  /** @nullable */
+  lastStudyDate: string | null;
+  streakDates: string[];
+  weakTopics: WeakTopicSummary[];
+  recentActivity: RecentActivity;
 }
 

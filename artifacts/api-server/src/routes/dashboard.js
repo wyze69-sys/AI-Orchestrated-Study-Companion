@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { studySessionsTable, documentsTable, messagesTable } from "@workspace/db";
 import { eq, and, isNull, count, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
+import { getProgressSummary } from "../lib/progress-summary.js";
 const router = Router();
 router.get("/dashboard", requireAuth, async (req, res) => {
   try {
@@ -39,6 +40,17 @@ router.get("/dashboard", requireAuth, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+router.get("/progress/summary", requireAuth, async (req, res) => {
+  try {
+    const summary = await getProgressSummary(req.user.id);
+    res.json(summary);
+  } catch (err) {
+    req.log.error({ err }, "Get progress summary error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 var stdin_default = router;
 export {
   stdin_default as default

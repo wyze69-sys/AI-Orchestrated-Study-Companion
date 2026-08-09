@@ -1,6 +1,8 @@
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
+import { router } from "expo-router";
+import { setApiUnauthorizedHandler } from "@/lib/api";
 import React, {
   createContext,
   useCallback,
@@ -113,10 +115,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  useEffect(() => {
-    setAuthTokenGetter(() => token);
-  }, [token]);
-
   const login = useCallback(async (newToken: string, newUser: AuthUser) => {
     await storeToken(newToken);
     setToken(newToken);
@@ -128,6 +126,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     setUser(null);
   }, []);
+
+  useEffect(() => {
+    setAuthTokenGetter(() => token);
+  }, [token]);
+
+  useEffect(() => {
+    let lastRedirect = 0;
+    setApiUnauthorizedHandler(() => {
+      const now = Date.now();
+      if (now - lastRedirect < 30000) return;
+      lastRedirect = now;
+      void (async () => {
+        await logout();
+        router.replace("/(auth)/login");
+      })();
+    });
+    return () => setApiUnauthorizedHandler(null);
+  }, [logout]);
 
   return (
     <AuthContext.Provider value={{ user, token, isLoading, login, logout }}>

@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AccountDeletionResponse,
   AuthInput,
   AuthResponse,
   ChatInput,
@@ -27,8 +28,16 @@ import type {
   Document,
   DocumentUpload,
   ErrorResponse,
+  FlashcardProgressInput,
+  FlashcardProgressItem,
+  FlashcardProgressWriteResponse,
+  FlashcardResetResponse,
   HealthStatus,
   Message,
+  ProgressSummary,
+  QuizResult,
+  QuizResultInput,
+  QuizResultSaveResponse,
   SessionNotesUpdate,
   StudySession,
   StudySessionInput,
@@ -267,6 +276,81 @@ export const useLogin = <TError = ErrorType<ErrorResponse>,
       return useMutation(getLoginMutationOptions(options));
     }
 
+export const getDeleteMeUrl = () => {
+
+
+
+
+  return `/api/auth/me`
+}
+
+/**
+ * Permanently deletes the current user and every owned record (sessions,
+documents, messages, quiz results, flashcard progress) inside a single
+transaction. Idempotent from the client's perspective: after success,
+the credential is invalidated and any repeat request is rejected with 401.
+
+ * @summary Delete the authenticated user's account and all owned data
+ */
+export const deleteMe = async ( options?: RequestInit): Promise<AccountDeletionResponse> => {
+
+  return customFetch<AccountDeletionResponse>(getDeleteMeUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteMeMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMe>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMe>>, TError,void, TContext> => {
+
+const mutationKey = ['deleteMe'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMe>>, void> = () => {
+
+
+          return  deleteMe(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMeMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMe>>>
+
+    export type DeleteMeMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete the authenticated user's account and all owned data
+ */
+export const useDeleteMe = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMe>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMe>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteMeMutationOptions(options));
+    }
+
 export const getGetDashboardUrl = () => {
 
 
@@ -332,6 +416,83 @@ export function useGetDashboard<TData = Awaited<ReturnType<typeof getDashboard>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetProgressSummaryUrl = () => {
+
+
+
+
+  return `/api/progress/summary`
+}
+
+/**
+ * @summary Get aggregated study progress summary with weak topics
+ */
+export const getProgressSummary = async ( options?: RequestInit): Promise<ProgressSummary> => {
+
+  return customFetch<ProgressSummary>(getGetProgressSummaryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProgressSummaryQueryKey = () => {
+    return [
+    `/api/progress/summary`
+    ] as const;
+    }
+
+
+export const getGetProgressSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getProgressSummary>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProgressSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProgressSummaryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProgressSummary>>> = ({ signal }) => getProgressSummary({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProgressSummary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProgressSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getProgressSummary>>>
+export type GetProgressSummaryQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get aggregated study progress summary with weak topics
+ */
+
+export function useGetProgressSummary<TData = Awaited<ReturnType<typeof getProgressSummary>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProgressSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProgressSummaryQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -709,6 +870,374 @@ export const useUpdateSessionNotes = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getUpdateSessionNotesMutationOptions(options));
+    }
+
+export const getGetFlashcardProgressUrl = (id: string,) => {
+
+
+
+
+  return `/api/sessions/${id}/flashcards/progress`
+}
+
+/**
+ * @summary List flashcard review progress for a session
+ */
+export const getFlashcardProgress = async (id: string, options?: RequestInit): Promise<FlashcardProgressItem[]> => {
+
+  return customFetch<FlashcardProgressItem[]>(getGetFlashcardProgressUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFlashcardProgressQueryKey = (id: string,) => {
+    return [
+    `/api/sessions/${id}/flashcards/progress`
+    ] as const;
+    }
+
+
+export const getGetFlashcardProgressQueryOptions = <TData = Awaited<ReturnType<typeof getFlashcardProgress>>, TError = ErrorType<ErrorResponse>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFlashcardProgress>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFlashcardProgressQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFlashcardProgress>>> = ({ signal }) => getFlashcardProgress(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFlashcardProgress>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFlashcardProgressQueryResult = NonNullable<Awaited<ReturnType<typeof getFlashcardProgress>>>
+export type GetFlashcardProgressQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List flashcard review progress for a session
+ */
+
+export function useGetFlashcardProgress<TData = Awaited<ReturnType<typeof getFlashcardProgress>>, TError = ErrorType<ErrorResponse>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFlashcardProgress>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFlashcardProgressQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostFlashcardProgressUrl = (id: string,) => {
+
+
+
+
+  return `/api/sessions/${id}/flashcards/progress`
+}
+
+/**
+ * @summary Upsert flashcard review status for one or more cards
+ */
+export const postFlashcardProgress = async (id: string,
+    flashcardProgressInput: FlashcardProgressInput, options?: RequestInit): Promise<FlashcardProgressWriteResponse> => {
+
+  return customFetch<FlashcardProgressWriteResponse>(getPostFlashcardProgressUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      flashcardProgressInput,)
+  }
+);}
+
+
+
+
+export const getPostFlashcardProgressMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postFlashcardProgress>>, TError,{id: string;data: BodyType<FlashcardProgressInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postFlashcardProgress>>, TError,{id: string;data: BodyType<FlashcardProgressInput>}, TContext> => {
+
+const mutationKey = ['postFlashcardProgress'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postFlashcardProgress>>, {id: string;data: BodyType<FlashcardProgressInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  postFlashcardProgress(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostFlashcardProgressMutationResult = NonNullable<Awaited<ReturnType<typeof postFlashcardProgress>>>
+    export type PostFlashcardProgressMutationBody = BodyType<FlashcardProgressInput>
+    export type PostFlashcardProgressMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Upsert flashcard review status for one or more cards
+ */
+export const usePostFlashcardProgress = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postFlashcardProgress>>, TError,{id: string;data: BodyType<FlashcardProgressInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postFlashcardProgress>>,
+        TError,
+        {id: string;data: BodyType<FlashcardProgressInput>},
+        TContext
+      > => {
+      return useMutation(getPostFlashcardProgressMutationOptions(options));
+    }
+
+export const getResetFlashcardProgressUrl = (id: string,) => {
+
+
+
+
+  return `/api/sessions/${id}/flashcards/progress`
+}
+
+/**
+ * @summary Reset all flashcard review progress for a session
+ */
+export const resetFlashcardProgress = async (id: string, options?: RequestInit): Promise<FlashcardResetResponse> => {
+
+  return customFetch<FlashcardResetResponse>(getResetFlashcardProgressUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getResetFlashcardProgressMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetFlashcardProgress>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resetFlashcardProgress>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['resetFlashcardProgress'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetFlashcardProgress>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  resetFlashcardProgress(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResetFlashcardProgressMutationResult = NonNullable<Awaited<ReturnType<typeof resetFlashcardProgress>>>
+
+    export type ResetFlashcardProgressMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Reset all flashcard review progress for a session
+ */
+export const useResetFlashcardProgress = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetFlashcardProgress>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resetFlashcardProgress>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getResetFlashcardProgressMutationOptions(options));
+    }
+
+export const getGetQuizResultsUrl = (id: string,) => {
+
+
+
+
+  return `/api/sessions/${id}/quizzes/results`
+}
+
+/**
+ * @summary List completed quiz results for a session
+ */
+export const getQuizResults = async (id: string, options?: RequestInit): Promise<QuizResult[]> => {
+
+  return customFetch<QuizResult[]>(getGetQuizResultsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetQuizResultsQueryKey = (id: string,) => {
+    return [
+    `/api/sessions/${id}/quizzes/results`
+    ] as const;
+    }
+
+
+export const getGetQuizResultsQueryOptions = <TData = Awaited<ReturnType<typeof getQuizResults>>, TError = ErrorType<ErrorResponse>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getQuizResults>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetQuizResultsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getQuizResults>>> = ({ signal }) => getQuizResults(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getQuizResults>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetQuizResultsQueryResult = NonNullable<Awaited<ReturnType<typeof getQuizResults>>>
+export type GetQuizResultsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List completed quiz results for a session
+ */
+
+export function useGetQuizResults<TData = Awaited<ReturnType<typeof getQuizResults>>, TError = ErrorType<ErrorResponse>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getQuizResults>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetQuizResultsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostQuizResultUrl = (id: string,) => {
+
+
+
+
+  return `/api/sessions/${id}/quizzes/results`
+}
+
+/**
+ * @summary Save a completed quiz result (idempotent per session and quiz)
+ */
+export const postQuizResult = async (id: string,
+    quizResultInput: QuizResultInput, options?: RequestInit): Promise<QuizResultSaveResponse> => {
+
+  return customFetch<QuizResultSaveResponse>(getPostQuizResultUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      quizResultInput,)
+  }
+);}
+
+
+
+
+export const getPostQuizResultMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postQuizResult>>, TError,{id: string;data: BodyType<QuizResultInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postQuizResult>>, TError,{id: string;data: BodyType<QuizResultInput>}, TContext> => {
+
+const mutationKey = ['postQuizResult'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postQuizResult>>, {id: string;data: BodyType<QuizResultInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  postQuizResult(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostQuizResultMutationResult = NonNullable<Awaited<ReturnType<typeof postQuizResult>>>
+    export type PostQuizResultMutationBody = BodyType<QuizResultInput>
+    export type PostQuizResultMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Save a completed quiz result (idempotent per session and quiz)
+ */
+export const usePostQuizResult = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postQuizResult>>, TError,{id: string;data: BodyType<QuizResultInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postQuizResult>>,
+        TError,
+        {id: string;data: BodyType<QuizResultInput>},
+        TContext
+      > => {
+      return useMutation(getPostQuizResultMutationOptions(options));
     }
 
 export const getListDocumentsUrl = (id: string,) => {

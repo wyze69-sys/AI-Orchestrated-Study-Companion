@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --config vite.config.js --host 0.0.0.0",
     "build": "vite build --config vite.config.js",
-    "serve": "vite preview --config vite.config.js --host 0.0.0.0"
+    "serve": "vite preview --config vite.config.js --host 0.0.0.0",
+    "test": "node --test ./src/lib/chat-modes.test.js ./src/lib/sources.test.js ./src/lib/citation-navigation.test.js ./src/lib/quiz.test.js ./src/lib/flashcards.test.js ./src/lib/session-errors.test.js"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

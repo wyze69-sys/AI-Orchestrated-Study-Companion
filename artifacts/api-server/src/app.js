@@ -2,9 +2,33 @@ import express from "express";
 import cors from "cors";
 import multer from "multer";
 import pinoHttp from "pino-http";
-import router from "./routes";
+import router from "./routes/index.js";
 import { logger } from "./lib/logger";
-import { rateLimit } from "./middlewares/rate-limit";
+import { rateLimit } from "./middlewares/rate-limit.js";
+import { registerRateLimitTestResetRoute } from "./middlewares/rate-limit-test-reset.js";
+
+function resolveCorsOrigins() {
+  const raw = process.env.CORS_ORIGINS;
+  if (!raw || !raw.trim()) return null; // dev default: reflect request origin
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function corsOrigin(origin, callback) {
+  const allowlist = resolveCorsOrigins();
+  if (!origin || !allowlist) {
+    callback(null, true);
+    return;
+  }
+  if (allowlist.includes(origin)) {
+    callback(null, true);
+    return;
+  }
+  callback(new Error(`Origin ${origin} is not allowed by CORS`));
+}
+
 const app = express();
 app.use(
   pinoHttp({
@@ -25,11 +49,23 @@ app.use(
     }
   })
 );
-app.use(cors({ credentials: true, origin: true }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(rateLimit({ windowMs: 6e4, max: 100 }));
-app.use("/api/auth", rateLimit({ windowMs: 6e4, max: 10, message: "Too many auth attempts, try again later." }));
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  if (_req.path.startsWith("/api/auth")) {
+    res.setHeader("Cache-Control", "no-store");
+  }
+  next();
+});
+app.use(cors({ credentials: true, origin: corsOrigin }));
+app.use(express.json({ limit: "100kb" }));
+app.use(express.urlencoded({ extended: true, limit: "100kb" }));
+app.use(rateLimit({ scope: "global", windowMs: 6e4, max: 100 }));
+app.use("/api/auth/login", rateLimit({ scope: "auth-attempt", windowMs: 6e4, max: 10, message: "Too many auth attempts, try again later." }));
+app.use("/api/auth/register", rateLimit({ scope: "auth-attempt", windowMs: 6e4, max: 10, message: "Too many auth attempts, try again later." }));
+
+registerRateLimitTestResetRoute(app);
 app.use("/api", router);
 app.use((err, _req, res, _next) => {
   if (err instanceof multer.MulterError) {

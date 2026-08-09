@@ -2,12 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useLogin } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, Loader2 } from "lucide-react";
-import { motion } from "framer-motion";
+import { Icon } from "@/components/icons";
 function LoginPage() {
   const [, setLocation] = useLocation();
   const { login } = useAuth();
@@ -31,90 +26,75 @@ function LoginPage() {
     setError("");
     loginMutation.mutate({ data: { email, password } });
   };
-  return <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md">
-        <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.4 }}
-  >
-          <div className="flex items-center justify-center gap-2 mb-8">
-            <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
-              <BookOpen className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-semibold text-foreground">Study Companion</span>
+  return <div className="auth-wrap">
+      <div className="auth-art">
+        <p className="eyebrow">Place your materials · Study with a tutor that stays in them</p>
+        <h1>An AI study partner grounded only in what you bring.</h1>
+        <p className="lead">Upload notes or a reading, and every answer, flashcard and quiz is built from your own material — with citations back to your sources.</p>
+        <div className="feature-list">
+          <div className="f-row">
+            <Icon name="book" />
+            <span>Ground every answer in your uploaded documents</span>
           </div>
-
-          <Card className="shadow-lg border-card-border">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl">Welcome back</CardTitle>
-              <CardDescription>Sign in to continue your studies</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-    id="email"
+          <div className="f-row">
+            <Icon name="spark" />
+            <span>Turn any passage into flashcards, quizzes or a plain-English explanation</span>
+          </div>
+          <div className="f-row">
+            <Icon name="note" />
+            <span>Keep live notes that the tutor can read back as you study</span>
+          </div>
+        </div>
+      </div>
+      <div className="auth-panel">
+        <div className="auth-card">
+          <h2 id="auth-title">Sign in</h2>
+          <p className="sub" id="auth-sub">Pick up where you left off.</p>
+          <form className="form-stack" onSubmit={handleSubmit}>
+            <div className="field">
+              <label htmlFor="a-email">Email</label>
+              <input
+    className="input"
+    id="a-email"
     type="email"
-    placeholder="you@example.com"
+    placeholder="you@university.edu"
     value={email}
     onChange={(e) => setEmail(e.target.value)}
     required
-    data-testid="input-email"
     autoComplete="email"
+    data-testid="input-email"
   />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-    id="password"
+            </div>
+            <div className="field">
+              <label htmlFor="a-password">Password</label>
+              <input
+    className="input"
+    id="a-password"
     type="password"
     placeholder="••••••••"
     value={password}
     onChange={(e) => setPassword(e.target.value)}
     required
-    data-testid="input-password"
     autoComplete="current-password"
+    data-testid="input-password"
   />
-                </div>
-
-                {error && <motion.p
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    className="text-sm text-destructive"
-    data-testid="text-login-error"
-  >
-                    {error}
-                  </motion.p>}
-
-                <Button
-    type="submit"
-    className="w-full"
-    disabled={loginMutation.isPending}
-    data-testid="button-login"
-  >
-                  {loginMutation.isPending ? <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Signing in...
-                    </> : "Sign in"}
-                </Button>
-
-                <p className="text-center text-sm text-muted-foreground">
-                  No account?{" "}
-                  <button
-    type="button"
-    onClick={() => setLocation("/register")}
-    className="text-primary hover:underline font-medium"
-    data-testid="link-register"
-  >
-                    Create one
-                  </button>
-                </p>
-              </form>
-            </CardContent>
-          </Card>
-        </motion.div>
+            </div>
+            {error && <p className="err show" data-testid="text-login-error">
+                {error}
+              </p>}
+            <div className="form-actions">
+              <button className="btn btn-primary" type="submit" disabled={loginMutation.isPending} data-testid="button-login">
+                {loginMutation.isPending ? "Signing in…" : "Continue"}
+              </button>
+            </div>
+          </form>
+          <p className="switch-link">
+            <span>New here?</span>{" "}
+            <button type="button" onClick={() => setLocation("/register")} data-testid="link-register">
+              Create an account
+            </button>
+          </p>
+        </div>
       </div>
     </div>;
 }

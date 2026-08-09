@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
-    "start": "node --enable-source-maps ./dist/index.mjs"
+    "start": "node --enable-source-maps ./dist/index.mjs",
+    "cleanup": "node ./src/maintenance-cli.js",
+    "test": "node --test ./src/lib/chat-modes.test.js ./src/lib/chat-fallback.test.js ./src/lib/quote-verification.test.js ./src/lib/source-extraction.test.js ./src/lib/message-persistence.test.js ./src/lib/flashcard-persistence.test.js ./src/lib/quiz-persistence.test.js ./src/lib/progress-summary.test.js ./src/lib/maintenance-cleanup.test.js ./src/lib/auth-validation.test.js ./src/middlewares/rate-limit.test.js ./src/middlewares/rate-limit-reset-endpoint.test.js"
   },
   "dependencies": {
     "@google/genai": "^1.52.0",
@@ -16,6 +18,7 @@
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
+    "dotenv": "^16.4.7",
     "drizzle-orm": "catalog:",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",

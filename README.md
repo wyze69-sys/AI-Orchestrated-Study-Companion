@@ -1,12 +1,12 @@
 # AI-Orchestrated Study Companion
 
-Unfinished full-stack study companion app with web, mobile, API, database, and AI chat pieces in a pnpm workspace.
+Full-stack study companion app with web, mobile, API, database, and AI chat pieces in a pnpm workspace.
 
 ## Current Status
 
-This project is not finished. It has working structure and several implemented flows, but needs more hardening, verification, and polish before production use.
-
-Important recent change: `@workspace/db` was converted from TypeScript source files to Node ESM JavaScript source files. Its package exports now point to `lib/db/src/*.js`, while declaration files remain available from `lib/db/dist`.
+Project is feature-complete and verified locally: `pnpm install`, `pnpm run typecheck`, and
+`pnpm run build` all pass from a fresh clone. `@workspace/db` uses Node ESM JavaScript source
+files, and its package exports point to `lib/db/src/*.js` with declaration files in `lib/db/dist`.
 
 ## Setup
 
@@ -36,6 +36,11 @@ PORT=5000
 
 `JWT_SECRET` must be at least 64 characters.
 
+`.env` is loaded automatically at runtime:
+
+- `artifacts/api-server/src/env.js` loads the workspace-root `.env` before the app starts.
+- `lib/db/drizzle.config.js` loads it too, so `pnpm --filter @workspace/db run push` works locally.
+
 ## Useful Commands
 
 ```sh
@@ -45,6 +50,10 @@ pnpm --filter @workspace/api-spec run codegen
 pnpm run typecheck
 pnpm run build
 ```
+
+Note: `study-mobile`'s `build` script produces the Replit static Expo Go deployment. Outside
+Replit it prints a message and exits 0, so the root build stays green. Use
+`pnpm --filter @workspace/study-mobile exec expo start` for local mobile development.
 
 ## Repo Map
 

@@ -36,12 +36,17 @@ function AuthProvider({ children }) {
     return () => setAuthTokenGetter(null);
   }, []);
   useEffect(() => {
+    let redirected = false;
     setOnUnauthorized(() => {
       if (localStorage.getItem(TOKEN_KEY)) {
         localStorage.removeItem(TOKEN_KEY);
         clearTemporaryChatState();
         setToken(null);
         setUser(null);
+        if (!redirected && !window.location.pathname.startsWith("/login")) {
+          redirected = true;
+          window.location.href = "/login";
+        }
       }
     });
     return () => setOnUnauthorized(null);

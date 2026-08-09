@@ -50,3 +50,7 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Logs
+*.log
+api-server*.log

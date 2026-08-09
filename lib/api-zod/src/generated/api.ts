@@ -53,6 +53,20 @@ export const LoginResponse = zod.object({
 
 
 /**
+ * Permanently deletes the current user and every owned record (sessions,
+documents, messages, quiz results, flashcard progress) inside a single
+transaction. Idempotent from the client's perspective: after success,
+the credential is invalidated and any repeat request is rejected with 401.
+
+ * @summary Delete the authenticated user's account and all owned data
+ */
+export const DeleteMeResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string()
+})
+
+
+/**
  * @summary Get dashboard summary stats
  */
 export const GetDashboardResponse = zod.object({
@@ -68,6 +82,53 @@ export const GetDashboardResponse = zod.object({
   "documentCount": zod.number(),
   "messageCount": zod.number()
 }))
+})
+
+
+/**
+ * @summary Get aggregated study progress summary with weak topics
+ */
+export const GetProgressSummaryResponse = zod.object({
+  "totalSessions": zod.number(),
+  "totalCompletedQuizzes": zod.number(),
+  "averageQuizPercentage": zod.number(),
+  "bestQuizPercentage": zod.number(),
+  "totalFlashcardsReviewed": zod.number(),
+  "knownFlashcardsCount": zod.number(),
+  "reviewAgainFlashcardsCount": zod.number(),
+  "currentStreak": zod.number(),
+  "longestStreak": zod.number(),
+  "activeStudyDays": zod.number(),
+  "lastStudyDate": zod.coerce.date().nullable(),
+  "streakDates": zod.array(zod.coerce.date()),
+  "weakTopics": zod.array(zod.object({
+  "topic": zod.string(),
+  "attempts": zod.number(),
+  "incorrectTotal": zod.number(),
+  "recentIncorrectCount": zod.number(),
+  "accuracy": zod.number(),
+  "lastActivity": zod.coerce.date().nullable()
+})),
+  "recentActivity": zod.object({
+  "latestQuiz": zod.object({
+  "id": zod.string().optional(),
+  "quizId": zod.string().optional(),
+  "sessionId": zod.string().optional(),
+  "documentId": zod.string().nullish(),
+  "messageId": zod.string().nullish(),
+  "totalQuestions": zod.number().optional(),
+  "score": zod.number().optional(),
+  "percentage": zod.number().optional(),
+  "completedAt": zod.coerce.date().optional()
+}).nullable(),
+  "latestFlashcardActivity": zod.object({
+  "id": zod.string().optional(),
+  "cardId": zod.string().optional(),
+  "sessionId": zod.string().optional(),
+  "status": zod.string().optional(),
+  "updatedAt": zod.coerce.date().optional()
+}).nullable()
+})
 })
 
 
@@ -160,6 +221,152 @@ export const UpdateSessionNotesResponse = zod.object({
 
 
 /**
+ * @summary List flashcard review progress for a session
+ */
+export const GetFlashcardProgressParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetFlashcardProgressResponseItem = zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "sessionId": zod.string(),
+  "documentId": zod.string().nullish(),
+  "messageId": zod.string().nullish(),
+  "cardId": zod.string(),
+  "status": zod.enum(['known', 'review']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const GetFlashcardProgressResponse = zod.array(GetFlashcardProgressResponseItem)
+
+
+/**
+ * @summary Upsert flashcard review status for one or more cards
+ */
+export const PostFlashcardProgressParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const PostFlashcardProgressBody = zod.union([zod.object({
+  "cardId": zod.string(),
+  "status": zod.enum(['known', 'review']),
+  "documentId": zod.string().nullish(),
+  "messageId": zod.string().nullish()
+}),zod.array(zod.object({
+  "cardId": zod.string(),
+  "status": zod.enum(['known', 'review']),
+  "documentId": zod.string().nullish(),
+  "messageId": zod.string().nullish()
+})),zod.object({
+  "progress": zod.array(zod.object({
+  "cardId": zod.string(),
+  "status": zod.enum(['known', 'review']),
+  "documentId": zod.string().nullish(),
+  "messageId": zod.string().nullish()
+}))
+})])
+
+export const PostFlashcardProgressResponse = zod.object({
+  "success": zod.boolean(),
+  "progress": zod.array(zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "sessionId": zod.string(),
+  "documentId": zod.string().nullish(),
+  "messageId": zod.string().nullish(),
+  "cardId": zod.string(),
+  "status": zod.enum(['known', 'review']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Reset all flashcard review progress for a session
+ */
+export const ResetFlashcardProgressParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const ResetFlashcardProgressResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string()
+})
+
+
+/**
+ * @summary List completed quiz results for a session
+ */
+export const GetQuizResultsParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetQuizResultsResponseItem = zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "sessionId": zod.string(),
+  "documentId": zod.string().nullish(),
+  "messageId": zod.string().nullish(),
+  "quizId": zod.string(),
+  "totalQuestions": zod.number(),
+  "score": zod.number(),
+  "percentage": zod.number(),
+  "answerState": zod.record(zod.string(), zod.string()),
+  "completedAt": zod.coerce.date(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const GetQuizResultsResponse = zod.array(GetQuizResultsResponseItem)
+
+
+/**
+ * @summary Save a completed quiz result (idempotent per session and quiz)
+ */
+export const PostQuizResultParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+export const postQuizResultBodyScoreMin = 0;
+
+export const postQuizResultBodyPercentageMin = 0;
+export const postQuizResultBodyPercentageMax = 100;
+
+
+
+export const PostQuizResultBody = zod.object({
+  "quizId": zod.string(),
+  "messageId": zod.string().nullish(),
+  "documentId": zod.string().nullish(),
+  "totalQuestions": zod.number().min(1),
+  "score": zod.number().min(postQuizResultBodyScoreMin),
+  "percentage": zod.number().min(postQuizResultBodyPercentageMin).max(postQuizResultBodyPercentageMax),
+  "answerState": zod.record(zod.string(), zod.string())
+})
+
+export const PostQuizResultResponse = zod.object({
+  "success": zod.boolean(),
+  "result": zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "sessionId": zod.string(),
+  "documentId": zod.string().nullish(),
+  "messageId": zod.string().nullish(),
+  "quizId": zod.string(),
+  "totalQuestions": zod.number(),
+  "score": zod.number(),
+  "percentage": zod.number(),
+  "answerState": zod.record(zod.string(), zod.string()),
+  "completedAt": zod.coerce.date(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+})
+
+
+/**
  * @summary List documents for a session
  */
 export const ListDocumentsParams = zod.object({
@@ -210,6 +417,13 @@ export const ListMessagesResponseItem = zod.object({
   "documentId": zod.string().nullable(),
   "role": zod.enum(['user', 'assistant']),
   "content": zod.string(),
+  "sources": zod.array(zod.object({
+  "quote": zod.string(),
+  "startOffset": zod.number(),
+  "endOffset": zod.number(),
+  "startLine": zod.number(),
+  "endLine": zod.number()
+})).optional(),
   "createdAt": zod.coerce.date()
 })
 export const ListMessagesResponse = zod.array(ListMessagesResponseItem)

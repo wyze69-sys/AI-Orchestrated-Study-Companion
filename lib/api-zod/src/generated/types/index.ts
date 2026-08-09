@@ -6,18 +6,37 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './accountDeletionResponse';
 export * from './authInput';
 export * from './authResponse';
 export * from './chatInput';
+export * from './citationSource';
 export * from './dashboardSummary';
 export * from './document';
 export * from './documentUpload';
 export * from './errorResponse';
+export * from './flashcardProgressInput';
+export * from './flashcardProgressItem';
+export * from './flashcardProgressItemStatus';
+export * from './flashcardProgressWrite';
+export * from './flashcardProgressWriteResponse';
+export * from './flashcardProgressWriteStatus';
+export * from './flashcardResetResponse';
 export * from './healthStatus';
 export * from './message';
 export * from './messageRole';
+export * from './progressSummary';
+export * from './quizResult';
+export * from './quizResultAnswerState';
+export * from './quizResultInput';
+export * from './quizResultInputAnswerState';
+export * from './quizResultSaveResponse';
+export * from './recentActivity';
+export * from './recentActivityLatestFlashcardActivity';
+export * from './recentActivityLatestQuiz';
 export * from './sessionNotesUpdate';
 export * from './studySession';
 export * from './studySessionInput';
 export * from './studySessionWithDocuments';
 export * from './user';
+export * from './weakTopicSummary';

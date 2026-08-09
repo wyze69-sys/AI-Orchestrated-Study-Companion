@@ -5,6 +5,7 @@
  * AI-Orchestrated Study Companion API
  * OpenAPI spec version: 0.1.0
  */
+import type { CitationSource } from './citationSource';
 import type { MessageRole } from './messageRole';
 
 export interface Message {
@@ -14,5 +15,6 @@ export interface Message {
   documentId: string | null;
   role: MessageRole;
   content: string;
+  sources?: CitationSource[];
   createdAt: Date;
 }

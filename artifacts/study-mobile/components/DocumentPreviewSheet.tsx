@@ -22,6 +22,7 @@ interface DocumentPreviewSheetProps {
   isSelectedForChat: boolean;
   onClose: () => void;
   onToggleChatSelection: (doc: Document) => void;
+  lineRangeNote?: string | null;
 }
 
 const SHEET_HEIGHT = Dimensions.get("window").height * 0.85;
@@ -97,6 +98,7 @@ export function DocumentPreviewSheet({
   isSelectedForChat,
   onClose,
   onToggleChatSelection,
+  lineRangeNote = null,
 }: DocumentPreviewSheetProps) {
   const colors = useColors();
   const colorScheme = useColorScheme();
@@ -261,7 +263,14 @@ export function DocumentPreviewSheet({
             </Pressable>
           </View>
 
-          <View style={styles.contentArea}>{renderContent()}</View>
+          <View style={styles.contentArea}>{lineRangeNote ? (
+            <View style={[styles.lineNote, { backgroundColor: colors.accent, borderColor: colors.primary }]}>
+              <Feather name="map-pin" size={12} color={colors.primary} />
+              <Text style={[styles.lineNoteText, { color: colors.accentForeground }]}>
+                Citation source — lines {lineRangeNote}
+              </Text>
+            </View>
+          ) : null}{renderContent()}</View>
 
           <View
             style={[
@@ -355,6 +364,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   contentArea: { flex: 1 },
+  lineNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+  },
+  lineNoteText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+  },
   webView: { flex: 1 },
   scroll: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 24 },

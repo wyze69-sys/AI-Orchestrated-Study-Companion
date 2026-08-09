@@ -30,6 +30,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { CHAT_MODE_CHAT } from "@/lib/chatModes";
+import { CitationSource, extractSourcesFromFrame, formatLineRange, normalizeSources } from "@/lib/sources";
+import { apiRequest } from "@/lib/api";
+import { parseFlashcardResponse } from "@/lib/flashcards";
+import { getQuizIdentity, parseQuizResponse } from "@/lib/quiz";
+import { QuizCard } from "@/components/QuizCard";
+import { FlashcardDeck } from "@/components/FlashcardDeck";
 import { DocumentPreviewSheet } from "@/components/DocumentPreviewSheet";
 import type { Document } from "@/types/document";
 
@@ -39,6 +46,7 @@ interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  sources?: CitationSource[];
 }
 
 let msgCounter = 0;
@@ -58,6 +66,9 @@ export default function SessionScreen() {
   const [activeTab, setActiveTab] = useState<Tab>("documents");
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [previewLineNote, setPreviewLineNote] = useState<string | null>(null);
+  const [quizResults, setQuizResults] = useState<Array<Record<string, unknown>>>([]);
+  const [flashcardMastery, setFlashcardMastery] = useState<Record<string, string>>({});
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -85,10 +96,11 @@ export default function SessionScreen() {
 
   useEffect(() => {
     if (historyMessages && historyMessages.length > 0 && !initializedChat.current) {
-      const msgs: ChatMessage[] = (historyMessages as Array<{id: string; role: string; content: string}>).map((m) => ({
+      const msgs: ChatMessage[] = (historyMessages as Array<{id: string; role: string; content: string; sources?: CitationSource[]}>).map((m) => ({
         id: m.id,
         role: m.role as "user" | "assistant",
         content: m.content,
+        sources: m.sources ?? [],
       }));
       setMessages(msgs);
       initializedChat.current = true;
@@ -104,6 +116,45 @@ export default function SessionScreen() {
       chatAbortRef.current?.abort();
     };
   }, []);
+
+  // Hydrate saved quiz results and flashcard review statuses for this session
+  // so reloads restore completed quizzes and card mastery without re-answering.
+  useEffect(() => {
+    if (!token || !id) return;
+    apiRequest(`/sessions/${id}/quizzes/results`, { token })
+      .then((data) => {
+        if (Array.isArray(data)) setQuizResults(data);
+      })
+      .catch(() => {});
+    apiRequest(`/sessions/${id}/flashcards/progress`, { token })
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const map: Record<string, string> = {};
+          for (const item of data) {
+            if (item && typeof item === "object" && item.cardId && item.status) {
+              map[String(item.cardId)] = String(item.status);
+            }
+          }
+          setFlashcardMastery(map);
+        }
+      })
+      .catch(() => {});
+  }, [token, id]);
+
+  const handleCardCitation = useCallback(
+    (citation: { quote: string; startLine: number | null; endLine: number | null }) => {
+      if (!citation) return;
+      const quote = citation.quote;
+      const sessionDocs = (session?.documents as Document[] | undefined) ?? [];
+      const target =
+        sessionDocs.find((d) => quote && d.content && d.content.includes(quote)) ?? selectedDoc;
+      if (!target) return;
+      const showLines = citation.startLine != null || citation.endLine != null;
+      setPreviewLineNote(showLines ? `${citation.startLine ?? "?"} – ${citation.endLine ?? "?"}` : null);
+      setPreviewDoc(target);
+    },
+    [session, selectedDoc]
+  );
 
   const handleUpload = useCallback(async () => {
     try {
@@ -208,6 +259,7 @@ export default function SessionScreen() {
           documentId: selectedDoc.id,
           message: text,
           includeNotes: notesText.trim().length > 0,
+          mode: CHAT_MODE_CHAT,
         }),
         signal: controller.signal,
       });
@@ -220,6 +272,7 @@ export default function SessionScreen() {
       const decoder = new TextDecoder();
       let buffer = "";
       let streamDone = false;
+      let latestSources: CitationSource[] = [];
 
       while (true) {
         if (streamDone) break;
@@ -234,7 +287,11 @@ export default function SessionScreen() {
           if (!line.startsWith("data: ")) continue;
           try {
             const parsed = JSON.parse(line.slice(6));
-            if (parsed.done) { streamDone = true; break; }
+            if (parsed.done) {
+              latestSources = extractSourcesFromFrame(parsed);
+              streamDone = true;
+              break;
+            }
             if (parsed.error) {
               // Append inline error from server (e.g. Gemini stream interrupted)
               fullContent += `\n\n⚠️ ${parsed.error}`;
@@ -256,7 +313,7 @@ export default function SessionScreen() {
                 setShowTyping(false);
                 setMessages((prev) => [
                   ...prev,
-                  { id: genId(), role: "assistant", content: fullContent },
+                  { id: genId(), role: "assistant", content: fullContent, sources: latestSources },
                 ]);
                 assistantAdded = true;
               } else {
@@ -265,6 +322,7 @@ export default function SessionScreen() {
                   updated[updated.length - 1] = {
                     ...updated[updated.length - 1],
                     content: fullContent,
+                    sources: latestSources,
                   };
                   return updated;
                 });
@@ -272,6 +330,17 @@ export default function SessionScreen() {
             }
           } catch {}
         }
+      }
+
+      if (assistantAdded && latestSources.length > 0) {
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            ...updated[updated.length - 1],
+            sources: latestSources,
+          };
+          return updated;
+        });
       }
     } catch (err) {
       // Silently ignore intentional aborts (screen unmount, new message sent).
@@ -403,6 +472,7 @@ export default function SessionScreen() {
               ]}
               onPress={() => {
                 setPreviewDoc(item);
+                setPreviewLineNote(null);
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }}
               testID={`doc-card-${item.id}`}
@@ -504,25 +574,108 @@ export default function SessionScreen() {
                     </View>
                   ) : null
                 }
-                renderItem={({ item }) => (
-                  <View
-                    style={[
-                      styles.msgBubble,
-                      item.role === "user"
-                        ? [styles.msgUser, { backgroundColor: colors.primary }]
-                        : [styles.msgAssistant, { backgroundColor: colors.card, borderColor: colors.border }],
-                    ]}
-                  >
-                    <Text
+                renderItem={({ item }) => {
+                  const isAssistant = item.role === "assistant";
+                  const normalized = isAssistant ? normalizeSources(item.sources) : [];
+
+                  const parsedCards = isAssistant ? parseFlashcardResponse(item.content) : null;
+                  const hasDeck = parsedCards !== null && parsedCards.cards.length > 0;
+                  const parsedQuiz = !hasDeck && isAssistant ? parseQuizResponse(item.content) : null;
+                  const hasQuiz = parsedQuiz !== null && parsedQuiz.questions.length > 0;
+
+                  const savedResult = hasQuiz
+                    ? quizResults.find(
+                        (r) =>
+                          r.quizId ===
+                            getQuizIdentity({
+                              content: item.content,
+                              messageId: item.id,
+                              documentId: selectedDoc?.id ?? null,
+                            }) ||
+                          r.quizId === item.id ||
+                          r.messageId === item.id ||
+                          r.quizId === (selectedDoc?.id ?? null) ||
+                          r.quizId === "default-quiz"
+                      )
+                    : undefined;
+
+                  return (
+                    <View
                       style={[
-                        styles.msgText,
-                        { color: item.role === "user" ? colors.primaryForeground : colors.foreground },
+                        styles.msgBubble,
+                        item.role === "user"
+                          ? [styles.msgUser, { backgroundColor: colors.primary }]
+                          : [styles.msgAssistant, { backgroundColor: colors.card, borderColor: colors.border }],
                       ]}
                     >
-                      {item.content}
-                    </Text>
-                  </View>
-                )}
+                      <Text
+                        style={[
+                          styles.msgText,
+                          { color: item.role === "user" ? colors.primaryForeground : colors.foreground },
+                        ]}
+                      >
+                        {item.content}
+                      </Text>
+                      {isAssistant && hasDeck && (
+                        <FlashcardDeck
+                          content={item.content}
+                          sessionId={id ?? ""}
+                          documentId={selectedDoc?.id ?? null}
+                          messageId={item.id}
+                          token={token}
+                          initialMastery={flashcardMastery}
+                          onSelectSource={handleCardCitation}
+                        />
+                      )}
+                      {isAssistant && hasQuiz && (
+                        <QuizCard
+                          content={item.content}
+                          messageId={item.id}
+                          documentId={selectedDoc?.id ?? null}
+                          sessionId={id ?? ""}
+                          token={token}
+                          savedResult={savedResult}
+                        />
+                      )}
+                      {isAssistant && (
+                        <View style={[styles.sourcesContainer, { borderTopColor: colors.border }]}>
+                          <View style={styles.sourcesHeader}>
+                            <Feather name="book-open" size={12} color={colors.primary} />
+                            <Text style={[styles.sourcesTitle, { color: colors.foreground }]}>Sources</Text>
+                          </View>
+                          {normalized.length === 0 ? (
+                            <Text style={[styles.sourcesEmptyText, { color: colors.mutedForeground }]}>
+                              No verified sources returned
+                            </Text>
+                          ) : (
+                            normalized.map((src, index) => {
+                              const lineRange = formatLineRange(src.startLine, src.endLine);
+                              return (
+                                <View key={index} style={[styles.sourceChip, { backgroundColor: colors.muted }]}>
+                                  <View style={[styles.sourceBadge, { backgroundColor: colors.primary }]}>
+                                    <Text style={[styles.sourceBadgeText, { color: colors.primaryForeground }]}>
+                                      {index + 1}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.sourceBody}>
+                                    {lineRange && (
+                                      <Text style={[styles.sourceLineText, { color: colors.primary }]}>
+                                        {lineRange}
+                                      </Text>
+                                    )}
+                                    <Text style={[styles.sourceQuoteText, { color: colors.foreground }]} numberOfLines={2}>
+                                      "{src.quote}"
+                                    </Text>
+                                  </View>
+                                </View>
+                              );
+                            })
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  );
+                }}
                 ListEmptyComponent={
                   <View style={styles.chatEmpty}>
                     <Feather name="message-circle" size={32} color={colors.mutedForeground} />
@@ -632,11 +785,15 @@ export default function SessionScreen() {
       <DocumentPreviewSheet
         document={previewDoc}
         isSelectedForChat={previewDoc !== null && selectedDoc?.id === previewDoc.id}
-        onClose={() => setPreviewDoc(null)}
+        onClose={() => {
+          setPreviewDoc(null);
+          setPreviewLineNote(null);
+        }}
         onToggleChatSelection={(doc) => {
           setSelectedDoc((prev) => (prev?.id === doc.id ? null : doc));
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         }}
+        lineRangeNote={previewLineNote}
       />
     </View>
   );
@@ -804,5 +961,56 @@ function makeStyles(colors: ReturnType<typeof import("@/hooks/useColors").useCol
       gap: 8,
     },
     saveBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+    sourcesContainer: {
+      marginTop: 10,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      gap: 6,
+    },
+    sourcesHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    sourcesTitle: {
+      fontSize: 12,
+      fontFamily: "Inter_600SemiBold",
+    },
+    sourcesEmptyText: {
+      fontSize: 12,
+      fontFamily: "Inter_400Regular",
+    },
+    sourceChip: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      padding: 8,
+      borderRadius: 8,
+      gap: 8,
+    },
+    sourceBadge: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 1,
+    },
+    sourceBadgeText: {
+      fontSize: 11,
+      fontFamily: "Inter_600SemiBold",
+    },
+    sourceBody: {
+      flex: 1,
+      gap: 2,
+    },
+    sourceLineText: {
+      fontSize: 11,
+      fontFamily: "Inter_600SemiBold",
+    },
+    sourceQuoteText: {
+      fontSize: 12,
+      fontFamily: "Inter_400Regular",
+      fontStyle: "italic",
+    },
   });
 }
