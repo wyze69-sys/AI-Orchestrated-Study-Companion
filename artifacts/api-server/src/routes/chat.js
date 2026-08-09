@@ -8,6 +8,7 @@ import { ai } from "@workspace/integrations-gemini-ai";
 import { resolveChatMode, modeInstruction } from "../lib/chat-modes.js";
 import { extractVerifiedSources } from "../lib/source-extraction.js";
 import { createGroundedChatFallback } from "../lib/chat-fallback.js";
+import { createNvidiaChatStream, isNvidiaConfigured } from "../lib/nvidia-chat.js";
 const router = Router();
 const SYSTEM_PROMPT = `You are a focused, expert AI study assistant. Your goal is to help the student learn and master their study material.
 
@@ -141,8 +142,25 @@ ${doc.content}
     } catch (streamErr) {
       const isAbort = streamErr instanceof Error && streamErr.name === "AbortError" || controller.signal.aborted;
       if (!isAbort) {
-        streamError = true;
         req.log.error({ err: streamErr }, "Gemini stream error");
+        if (!fullResponse.trim() && isNvidiaConfigured()) {
+          try {
+            const nvidiaStream = await createNvidiaChatStream({
+              systemInstruction: SYSTEM_PROMPT,
+              contents: [...conversationHistory, userTurn],
+              signal: controller.signal,
+            });
+            for await (const text of nvidiaStream) {
+              if (text) {
+                fullResponse += text;
+                res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+              }
+            }
+          } catch (nvidiaErr) {
+            req.log.error({ err: nvidiaErr }, "NVIDIA stream error");
+          }
+        }
+        streamError = !fullResponse.trim();
       }
     } finally {
       req.off("close", onClose);

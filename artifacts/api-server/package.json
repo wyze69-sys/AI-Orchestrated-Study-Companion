@@ -8,7 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "cleanup": "node ./src/maintenance-cli.js",
-    "test": "node --test ./src/lib/chat-modes.test.js ./src/lib/chat-fallback.test.js ./src/lib/quote-verification.test.js ./src/lib/source-extraction.test.js ./src/lib/message-persistence.test.js ./src/lib/flashcard-persistence.test.js ./src/lib/quiz-persistence.test.js ./src/lib/progress-summary.test.js ./src/lib/maintenance-cleanup.test.js ./src/lib/auth-validation.test.js ./src/middlewares/rate-limit.test.js ./src/middlewares/rate-limit-reset-endpoint.test.js"
+    "test": "node --test ./src/lib/chat-modes.test.js ./src/lib/chat-fallback.test.js ./src/lib/nvidia-chat.test.js ./src/lib/quote-verification.test.js ./src/lib/source-extraction.test.js ./src/lib/message-persistence.test.js ./src/lib/flashcard-persistence.test.js ./src/lib/quiz-persistence.test.js ./src/lib/progress-summary.test.js ./src/lib/maintenance-cleanup.test.js ./src/lib/auth-validation.test.js ./src/middlewares/rate-limit.test.js ./src/middlewares/rate-limit-reset-endpoint.test.js"
   },
   "dependencies": {
     "@google/genai": "^1.52.0",
